@@ -1,8 +1,12 @@
-#include <iostream>
+#include <thread>
+#include "wsserver.h"
 
-int main()
+int main(int argc, char** argv)
 {
-    std::cout<<"Hello World!"<<std::endl;
+    WSServer server(argc, argv);
+    while(server.tick()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    }
     return 0;
 }
 
