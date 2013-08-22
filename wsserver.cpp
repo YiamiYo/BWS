@@ -60,16 +60,33 @@ WSServer::~WSServer() {
     state = State::None;
 }
 
+void clientMain(SOCKET sClient, sockaddr_in client) {
+
+}
+
 bool WSServer::tick() {
     if(state != State::Listen) return false;
 
-    SOCKET sClient;
-    sockaddr_in client;
-    int len = sizeof(client);
+    static SOCKET sClient;
+    static sockaddr_in aClient;
+    static int len = sizeof(aClient);
+    static u_long iMode = 1;
+    static std::list<client>::iterator cit;
 
-    if((sClient = accept(sListen, (sockaddr*)&client, &len)) == INVALID_SOCKET) printf(".");
-    else {
-        printf("\nClient connected(%s:%d)!\n", inet_ntoa(client.sin_addr), ntohs(client.sin_port));
+    if((sClient = accept(sListen, (sockaddr*)&aClient, &len)) != INVALID_SOCKET) {
+        printf("Client connected(%s:%d)!\n", inet_ntoa(aClient.sin_addr), ntohs(aClient.sin_port));
+        if(ioctlsocket(sClient, FIONBIO, &iMode)) printf("Could not set client socket to non-blocking!\n");
+        client temp(sClient, aClient);
+        clients.push_back(std::move(temp));
+    }
+
+    for(cit = clients.begin(); cit != clients.end();) {
+        if(!cit->tick()) {
+            printf("Client disconnected!\n");
+            clients.erase(cit++);
+        }
+        else cit++;
     }
     return true;
 }
+

@@ -5,4 +5,4 @@ add_executable(${PROJECT_NAME} ${SRC_LIST})
 
 set(CMAKE_CXX_FLAGS "-std=c++11 -static-libstdc++")
 
-target_link_libraries(${PROJECT_NAME} ws2_32)
+target_link_libraries(${PROJECT_NAME} ws2_32 crypto)
