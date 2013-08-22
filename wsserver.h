@@ -36,12 +36,33 @@ inline uint64_t ntohll(uint64_t num) {
     #endif
 }
 
+inline uint64_t htonll(uint64_t num) {
+    #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+        return num;
+    #elif __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+        union {
+            uint64_t v64;
+            uint8_t v8[8];
+        } val;
+        val.v64 = num;
+        uint8_t t;
+        t = val.v8[0]; val.v8[0] = val.v8[7]; val.v8[7] = t;
+        t = val.v8[1]; val.v8[1] = val.v8[6]; val.v8[6] = t;
+        t = val.v8[2]; val.v8[2] = val.v8[5]; val.v8[5] = t;
+        t = val.v8[3]; val.v8[3] = val.v8[4]; val.v8[4] = t;
+        return val.v64;
+    #else
+        #error "Invalid byte order"
+    #endif
+}
+
 inline void base64_encode(std::string& out) {
     BIO* bmem;
     BIO* b64;
     BUF_MEM* bptr;
 
     b64 = BIO_new(BIO_f_base64());
+    BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
     bmem = BIO_new(BIO_s_mem());
     b64 = BIO_push(b64, bmem);
     BIO_write(b64, out.c_str(), out.size());
@@ -276,14 +297,6 @@ public:
                                 ss<<"Upgrade: WebSocket\r\n";
                                 ss<<"Connection: Upgrade\r\n";
                                 ss<<"Sec-WebSocket-Accept: "<<accept<<"\r\n";
-                                ss<<"Server: BWS\r\n";
-                                ss<<"Access-Control-Allow-Origin: http://localhost:8080\r\n";
-                                //ss<<"Access-Control-Allow-Credentials: true\r\n";
-                                //ss<<"Access-Control-Allow-Headers: content-type\r\n";
-                                //ss<<"Access-Control-Allow-Headers: authorization\r\n";
-                                //ss<<"Access-Control-Allow-Headers: x-websocket-extensions\r\n";
-                                ss<<"Access-Control-Allow-Headers: x-websocket-version\r\n";
-                                ss<<"Access-Control-Allow-Headers: x-websocket-protocol\r\n";
                                 ss<<"\r\n";
                                 std::string response = ss.str();
                                 send(sock, response.c_str(), response.size(), 0);
@@ -314,15 +327,28 @@ public:
                 } else if(ret != SOCKET_ERROR) {
                     d->update(ret);
                     if(!d->nextRead) {
-                        printf("%s\n", d->getText().c_str());
-                        char buffer[] = { (char)0x81, (char)0x07, 'Y', 'i', 'a', 'm', 'i', 'Y', 'o' };
-                        //char c[] = { (char)0x88, (char)0x00};
-                        ret = send(sock, buffer, sizeof(buffer), 0);
-                        //ret = send(sock, c, sizeof(c), 0);
-                        //closesocket(sock);
-                        //return false;
-                        //ret = send(sock, (char*)&d->buffer[0], d->totalRead, 0);
-                        printf("send: %d\n", ret);
+                        std::string str = d->getText();
+                        printf("%s\n", str.c_str());
+
+                        char header[14];
+                        uint8_t hs = 0;
+                        header[0] = 0x81;
+                        if(str.size() < 0x7E) {
+                            header[1] = str.size();
+                            hs = 2;
+                        } else if(str.size() < 0xFFFF) {
+                            header[1] = 0x7E;
+                            uint16_t size = htonl(str.size());
+                            memcpy(header + 2, &size, sizeof(size));
+                            hs = 4;
+                        } else {
+                            header[1] = 0x7F;
+                            uint64_t size = htonll(str.size());
+                            memcpy(header + 2, &size, sizeof(size));
+                            hs = 10;
+                        }
+                        send(sock, header, hs, 0);
+                        send(sock, str.data(), str.size(), 0);
                     }
                 }
                 break;
